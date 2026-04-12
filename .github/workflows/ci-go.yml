@@ -1,0 +1,76 @@
+# .github/workflows/ci-go.yml
+#
+# Triggered ONLY when files under services/go-service/ change (path filtering).
+# Runs lint → test → calls the reusable release workflow.
+
+name: "CI: go-service"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/go-service/**"
+      - ".github/workflows/ci-go.yml"
+  pull_request:
+    paths:
+      - "services/go-service/**"
+      - ".github/workflows/ci-go.yml"
+
+  # Allow manual trigger for debugging
+  workflow_dispatch:
+
+concurrency:
+  group: ci-go-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Lint + Test with Go module caching
+  # ─────────────────────────────────────────────
+  test:
+    name: Lint & Test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/go-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: services/go-service/go.mod
+          # Caches both the module download cache and the build cache
+          cache-dependency-path: services/go-service/go.sum
+
+      - name: Download modules
+        run: go mod download
+
+      - name: Vet
+        run: go vet ./...
+
+      - name: Test
+        run: go test -v -race -coverprofile=coverage.out ./...
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: go-coverage
+          path: services/go-service/coverage.out
+          retention-days: 7
+
+  # ─────────────────────────────────────────────
+  # Docker build/push + Release via reusable workflow
+  # ─────────────────────────────────────────────
+  release:
+    name: Release
+    needs: test
+    uses: ./.github/workflows/reusable-service-release.yml
+    with:
+      service: go-service
+      image-name: go-service
+      working-directory: services/go-service
+      is-release: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    secrets:
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

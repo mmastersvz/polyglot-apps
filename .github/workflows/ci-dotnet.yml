@@ -55,6 +55,8 @@ jobs:
 
       - name: "Setup CI"
         id: setup-ci
+        env:
+          SERVICE: dotnet-service
         run: |
           if [[ github.event_name == 'pull_request' ]]; then
             echo "This is a PR build. Docker image will not be pushed."
@@ -64,13 +66,13 @@ jobs:
             echo "docker-push=true" >> $GITHUB_OUTPUT
           fi
 
-          docker-tags="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}"
+          docker-tags="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${SERVICE}:${{ github.sha }}"
           if [[ github.event_name == 'pull_request' ]]; then
             echo "This is a PR build. Docker image will be tagged with pr-${{ github.event.pull_request.number }}."
           else
             echo "This is a push to main. Docker image will be pushed with tags: ${{ steps.version.outputs.build-version }} and latest."
-            docker-tags="${docker-tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ steps.version.outputs.build-version }}"
-            docker-tags="${docker-tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest"
+            docker-tags="${docker-tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${SERVICE}:${{ steps.version.outputs.build-version }}"
+            docker-tags="${docker-tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${SERVICE}:latest"
           fi
           echo "docker-tags=${docker-tags}" >> $GITHUB_OUTPUT
 

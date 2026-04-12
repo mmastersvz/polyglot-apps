@@ -24,6 +24,8 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build-version: ${{ steps.version.outputs.build-version }}
+      docker-push: ${{ steps.setup-ci.outputs.docker-push }}
+      docker-tags: ${{ steps.setup-ci.outputs.docker-tags }}
 
     steps:
       - name: "Checkout"
@@ -50,6 +52,28 @@ jobs:
         with:
           service: dotnet-service
           token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: "Setup CI"
+        id: setup-ci
+        run: |
+          if [[ github.event_name == 'pull_request' ]]; then
+            echo "This is a PR build. Docker image will not be pushed."
+            echo "docker-push=false" >> $GITHUB_OUTPUT
+          else
+            echo "This is a push to main. Docker image will be pushed."
+            echo "docker-push=true" >> $GITHUB_OUTPUT
+          fi
+
+          docker-tags="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ github.sha }}"
+          if [[ github.event_name == 'pull_request' ]]; then
+            echo "This is a PR build. Docker image will be tagged with pr-${{ github.event.pull_request.number }}."
+          else
+            echo "This is a push to main. Docker image will be pushed with tags: ${{ steps.version.outputs.build-version }} and latest."
+            docker-tags="${docker-tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:${{ steps.version.outputs.build-version }}"
+            docker-tags="${docker-tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}:latest"
+          fi
+          echo "docker-tags=${docker-tags}" >> $GITHUB_OUTPUT
+
 
   build:
     name: Build & Test
@@ -91,4 +115,33 @@ jobs:
       - name: Test
         run: dotnet test --no-build -c Release --verbosity normal
 
-# TODO Docker and Scan container
+      - name: Login to GHCR
+        if: ${{ needs.setup.outputs.docker-push == 'true' }}
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ github.token }}
+
+      - name: Build & Push (multi-arch)
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: .
+          push: ${{ needs.setup.outputs.docker-push }}
+          tags: ${{ needs.setup.outputs.docker-tags }}
+          # platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          sbom: true
+          provenance: mode=max
+
+      - name: Trivy FS Scan (source)
+        uses: aquasecurity/trivy-action@0.35.0
+        with:
+          scan-type: "fs"
+          scan-ref: "."
+          format: "sarif"
+          output: "trivy-results.sarif"
+          severity: "CRITICAL,HIGH"

@@ -84,24 +84,29 @@ jobs:
       #     head: HEAD
       #     extra_args: --fail --results=verified,unknown
 
-      - name: "Cache: Super-Linter Docker layers"
-        uses: actions/cache@v4
+      # - name: "Cache: Super-Linter Docker layers"
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: /tmp/.buildx-cache
+      #     key: ${{ runner.os }}-superlinter-${{ github.sha }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-superlinter-
+
+      # - name: "Lint: Code Base"
+      #   uses: super-linter/super-linter@v8
+      #   env:
+      #     VALIDATE_ALL_CODEBASE: true # false TODO: Only lint changes (faster)
+      #     VALIDATE_CSHARP: true
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     FILTER_REGEX_INCLUDE: .*${{ steps.setup-ci.outputs.app-dir }}/.*
+
+      - name: "Setup: .NET"
+        uses: actions/setup-dotnet@v4
         with:
-          path: /tmp/.buildx-cache
-          key: ${{ runner.os }}-superlinter-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-superlinter-
+          dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
 
-      - name: "Lint: Code Base"
-        uses: super-linter/super-linter@v8
-        env:
-          VALIDATE_ALL_CODEBASE: true # false TODO: Only lint changes (faster)
-          VALIDATE_CSHARP: true
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          FILTER_REGEX_INCLUDE: .*${{ steps.setup-ci.outputs.app-dir }}/.*
-
-      # - name: "Lint: Dotnet Format"
-      #   run: dotnet format ${{ steps.setup-ci.outputs.app-dir }} --verify-no-changes
+      - name: "Lint: Dotnet Format"
+        run: dotnet format ${{ steps.setup-ci.outputs.app-dir }} --verify-no-changes
 
       - name: "Security Scan: Trivy (source code)"
         uses: mmastersvz/central-ci/actions/trivy-source-scan@main

@@ -20,7 +20,7 @@ concurrency:
 jobs:
 
   setup:
-    name: Setup
+    name: "Setup"
     runs-on: ubuntu-latest
     outputs:
       app-dir: ${{ steps.setup-ci.outputs.app-dir }}
@@ -36,7 +36,7 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: "Resolve version"
+      - name: "Version"
         id: version
         uses: mmastersvz/central-ci/actions/resolve-version@main
         with:
@@ -73,7 +73,7 @@ jobs:
           fi
           echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
 
-      # - name: Secret Detection (TruffleHog)
+      # - name: "Security: Secret Detection (TruffleHog)"
       #   uses: trufflesecurity/trufflehog@v3.94.3
       #   with:
       #     path: ./
@@ -81,7 +81,15 @@ jobs:
       #     head: HEAD
       #     extra_args: --fail --results=verified,unknown
 
-      - name: Lint Code Base
+      - name: "Cache: Docker layers"
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-superlinter-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-superlinter-
+
+      - name: "Lint: Code Base"
         uses: super-linter/super-linter@v8
         env:
           VALIDATE_ALL_CODEBASE: true # false TODO: Only lint changes (faster)
@@ -89,7 +97,10 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           FILTER_REGEX_INCLUDE: .*${{ steps.setup-ci.outputs.app-dir }}/.*
 
-      - name: Security Scan
+      # - name: "Lint: Dotnet Format"
+      #   run: dotnet format ${{ steps.setup-ci.outputs.app-dir }} --verify-no-changes
+
+      - name: "Security Scan: Trivy (source code)"
         uses: mmastersvz/central-ci/actions/trivy-source-scan@main
         with:
           app-name: ${{ steps.setup-ci.outputs.app-name }}
@@ -99,7 +110,7 @@ jobs:
       #   uses: mmastersvz/central-ci/actions/setup-git-config@main
 
   build:
-    name: Build & Test
+    name: "Build & Test"
     runs-on: ubuntu-latest
     needs: setup
     defaults:
@@ -111,14 +122,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up .NET
+      - name: "Setup: .NET"
         uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "8.0.x"
 
       # NuGet packages are cached by the NuGet global packages folder path + lock file hash.
       # This avoids re-downloading packages on every run.
-      - name: Cache NuGet packages
+      - name: "Cache: NuGet packages"
         uses: actions/cache@v4
         with:
           path: ~/.nuget/packages
@@ -126,14 +137,14 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - name: Build and Test Action
+      - name: "Build: .NET and Test"
         uses: mmastersvz/central-ci/actions/dotnet-build-test@main
         with:
           build-version: ${{ needs.setup.outputs.build-version }}
           project-path: ${{ needs.setup.outputs.project-path }}
           working-directory: ${{ needs.setup.outputs.app-dir }}
 
-      - name: Docker Publish Image
+      - name: "Docker: Build and Publish Image"
         uses: mmastersvz/central-ci/actions/docker-publish@main
         with:
           registry-password: ${{ github.token }}
@@ -142,7 +153,7 @@ jobs:
           context: ./${{ needs.setup.outputs.app-dir }}
           cache-scope: ${{ env.APP_NAME }}
 
-      - name: Security Scan
+      - name: "Security Scan: Trivy (container image)"
         uses: mmastersvz/central-ci/actions/trivy-image-scan@main
         with:
           app-name: ${{ env.APP_NAME }}

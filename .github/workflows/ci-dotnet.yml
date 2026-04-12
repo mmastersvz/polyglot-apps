@@ -84,6 +84,8 @@ jobs:
     defaults:
       run:
         working-directory: services/dotnet-service
+    env:
+      SERVICE: dotnet-service
 
     steps:
       - uses: actions/checkout@v4
@@ -125,17 +127,16 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ github.token }}
 
-      - name: Build & Push (multi-arch)
+      - name: Build & Push
         uses: docker/build-push-action@v7
         with:
           context: .
           file: .
           push: ${{ needs.setup.outputs.docker-push }}
           tags: ${{ needs.setup.outputs.docker-tags }}
-          # platforms: linux/amd64,linux/arm64
-          platforms: linux/amd64
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
+          platforms: linux/amd64,linux/arm64
+          cache-from: type=gha,scope=${SERVICE}
+          cache-to: type=gha,mode=max,scope=${SERVICE}
           sbom: true
           provenance: mode=max
 

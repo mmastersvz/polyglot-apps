@@ -112,33 +112,14 @@ jobs:
           project-path: 'src/DotnetService'
           working-directory: 'services/dotnet-service'
 
-      - name: Login to GHCR
-        if: ${{ needs.setup.outputs.docker-push == 'true' }}
-        uses: docker/login-action@v4
+      - name: Docker Publish Image
+        uses: mmastersvz/central-ci/actions/docker-publish@main
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ github.token }}
-
-      - name: Set up Docker Buildx
-        id: buildx
-        uses: docker/setup-buildx-action@v4
-        # with:
-        #   driver: docker-container
-
-      - name: Build & Push
-        uses: docker/build-push-action@v7
-        with:
-          builder: ${{ steps.buildx.outputs.name }}
+          registry-password: ${{ github.token }}
+          docker-push: ${{ needs.setup.outputs.docker-push }}
+          docker-tags: ${{ needs.setup.outputs.docker-tags }}
           context: ./services/dotnet-service
-          # file: ./Dockerfile
-          push: ${{ needs.setup.outputs.docker-push }}
-          tags: ${{ needs.setup.outputs.docker-tags }}
-          platforms: linux/amd64,linux/arm64
-          cache-from: type=gha,scope=${{ env.SERVICE }}
-          cache-to: type=gha,mode=max,scope=${{ env.SERVICE }}
-          sbom: true
-          provenance: mode=max
+          cache-scope: ${{ env.SERVICE }}
 
       - name: Trivy FS Scan (source)
         uses: aquasecurity/trivy-action@0.35.0

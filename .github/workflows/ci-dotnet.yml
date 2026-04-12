@@ -137,8 +137,8 @@ jobs:
         uses: docker/build-push-action@v7
         with:
           builder: ${{ steps.buildx.outputs.name }}
-          context: .
-          file: ./services/dotnet-service/Dockerfile
+          context: ./services/dotnet-service
+          file: ./Dockerfile
           push: ${{ needs.setup.outputs.docker-push }}
           tags: ${{ needs.setup.outputs.docker-tags }}
           platforms: linux/amd64,linux/arm64

@@ -1,0 +1,76 @@
+name: "CI: dotnet-service"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/dotnet-service/**"
+      - ".github/workflows/ci-dotnet.yml"
+  pull_request:
+    paths:
+      - "services/dotnet-service/**"
+      - ".github/workflows/ci-dotnet.yml"
+
+  workflow_dispatch:
+
+concurrency:
+  group: ci-dotnet-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+
+  setup:
+    name: Setup
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: "Setup git config"
+        uses: mmastersvz/central-ci/actions/setup-git-config@main
+
+      - name: "Resolve version"
+        id: version
+        uses: mmastersvz/central-ci/actions/resolve-version@main
+        with:
+          service: dotnet-service
+          # token: ${{ secrets.GITHUB_TOKEN }}
+
+  # test:
+  #   name: Build & Test
+  #   runs-on: ubuntu-latest
+  #   defaults:
+  #     run:
+  #       working-directory: services/dotnet-service
+
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - name: Set up .NET
+  #       uses: actions/setup-dotnet@v4
+  #       with:
+  #         dotnet-version: "8.0.x"
+
+  #     # NuGet packages are cached by the NuGet global packages folder path + lock file hash.
+  #     # This avoids re-downloading packages on every run.
+  #     - name: Cache NuGet packages
+  #       uses: actions/cache@v4
+  #       with:
+  #         path: ~/.nuget/packages
+  #         key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+  #         restore-keys: |
+  #           nuget-${{ runner.os }}-
+
+  #     - name: Restore
+  #       run: dotnet restore src/DotnetService
+
+  #     - name: Build
+  #       run: dotnet publish src/DotnetService -c Release -o ./publish --no-self-contained
+
+  #     - name: Test
+  #       run: dotnet test --no-build -c Release --verbosity normal
+
+

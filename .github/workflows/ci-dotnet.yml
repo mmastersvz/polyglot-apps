@@ -105,19 +105,11 @@ jobs:
           restore-keys: |
             nuget-${{ runner.os }}-
 
-      - name: Restore
-        run: dotnet restore src/DotnetService
-
-      - name: Build
-        run: |
-            dotnet publish src/DotnetService \
-              -c Release \
-              -o ./publish \
-              --no-self-contained \
-              /p:Version=${{ needs.setup.outputs.build-version }}
-
-      - name: Test
-        run: dotnet test --no-build -c Release --verbosity normal
+      - name: Build and Test Action
+        uses: mmastersvz/central-ci/actions/dotnet-build-test@main
+        with:
+          build-version: ${{ needs.setup.outputs.build-version }}
+          project-path: 'src/DotnetService'
 
       - name: Login to GHCR
         if: ${{ needs.setup.outputs.docker-push == 'true' }}

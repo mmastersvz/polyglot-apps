@@ -138,7 +138,7 @@ jobs:
         with:
           builder: ${{ steps.buildx.outputs.name }}
           context: .
-          file: ./Dockerfile
+          file: ./services/dotnet-service/Dockerfile
           push: ${{ needs.setup.outputs.docker-push }}
           tags: ${{ needs.setup.outputs.docker-tags }}
           platforms: linux/amd64,linux/arm64

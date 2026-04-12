@@ -110,6 +110,7 @@ jobs:
         with:
           build-version: ${{ needs.setup.outputs.build-version }}
           project-path: 'src/DotnetService'
+          working-directory: 'services/dotnet-service'
 
       - name: Login to GHCR
         if: ${{ needs.setup.outputs.docker-push == 'true' }}

@@ -37,7 +37,7 @@ jobs:
         uses: mmastersvz/central-ci/actions/resolve-version@main
         with:
           service: dotnet-service
-          # token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.GITHUB_TOKEN }}
 
   # test:
   #   name: Build & Test

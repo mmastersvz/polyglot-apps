@@ -90,6 +90,12 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Security Scan
+        uses: mmastersvz/central-ci/actions/trivy-source-scan@main
+        with:
+          app-name: ${{ env.SERVICE }}
+          scan-ref: ./services/dotnet-service
+
       - name: Set up .NET
         uses: actions/setup-dotnet@v4
         with:
@@ -121,16 +127,9 @@ jobs:
           context: ./services/dotnet-service
           cache-scope: ${{ env.SERVICE }}
 
-      - name: Trivy FS Scan (source)
-        uses: aquasecurity/trivy-action@0.35.0
+      - name: Security Scan
+        uses: mmastersvz/central-ci/actions/trivy-image-scan@main
         with:
-          scan-type: "fs"
-          scan-ref: "."
-          format: "sarif"
-          output: "trivy-results.sarif"
-          severity: "CRITICAL,HIGH"
-
-      # - name: Upload Trivy SARIF
-      #   uses: github/codeql-action/upload-sarif@v4
-      #   with:
-      #     sarif_file: "trivy-results.sarif"
+          app-name: ${{ env.SERVICE }}
+          scan-ref: ./services/dotnet-service
+          image-ref: ${{ needs.setup.outputs.docker-tags }}

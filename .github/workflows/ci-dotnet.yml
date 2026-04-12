@@ -36,7 +36,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: "Resolve version"
+        id: version
+        uses: mmastersvz/central-ci/actions/resolve-version@main
+        with:
+          service: dotnet-service
+          token: ${{ secrets.GITHUB_TOKEN }}
 
+      # must be after version step since it uses the build version to determine docker tags
       - name: "Setup CI"
         id: setup-ci
         env:
@@ -80,7 +87,7 @@ jobs:
           VALIDATE_ALL_CODEBASE: true # false TODO: Only lint changes (faster)
           VALIDATE_CSHARP: true
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
+          FILTER_REGEX_INCLUDE: .*${{ steps.setup-ci.outputs.app-dir }}/.*
 
       - name: Security Scan
         uses: mmastersvz/central-ci/actions/trivy-source-scan@main
@@ -88,15 +95,8 @@ jobs:
           app-name: ${{ steps.setup-ci.outputs.app-name }}
           scan-ref: ${{ steps.setup-ci.outputs.app-dir }}
 
-      - name: "Setup git config"
-        uses: mmastersvz/central-ci/actions/setup-git-config@main
-
-      - name: "Resolve version"
-        id: version
-        uses: mmastersvz/central-ci/actions/resolve-version@main
-        with:
-          service: dotnet-service
-          token: ${{ secrets.GITHUB_TOKEN }}
+      # - name: "Setup git config"
+      #   uses: mmastersvz/central-ci/actions/setup-git-config@main
 
   build:
     name: Build & Test

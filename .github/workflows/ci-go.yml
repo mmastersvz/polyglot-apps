@@ -22,7 +22,7 @@ env:
   APP_DIR: services/go-service
   PROJECT_PATH: .
   LANGUAGE: go
-  tools_version_file: ./.tool-versions
+  TOOL_VERSIONS: ./.tool-versions
 
 jobs:
 
@@ -42,8 +42,8 @@ jobs:
       - name: "Security Scan: Trivy (source code)"
         uses: mmastersvz/central-ci/actions/trivy-source-scan@main
         with:
-          app-name: ${APP_NAME}
-          scan-ref: ${APP_DIR}
+          app-name: ${{ env.APP_NAME }}
+          scan-ref: ${{ env.APP_DIR }}
 
   setup:
     name: "Setup"
@@ -80,22 +80,22 @@ jobs:
         #   APP_DIR: services/go-service
         #   PROJECT_PATH: .
         #   LANGUAGE: go
-        #   tools_version_file: ./.tool-versions
+        #   TOOL_VERSIONS: ./.tool-versions
         run: |
-          if [ ${LANGUAGE} == "go" ]; then
+          if [ ${{ env.LANGUAGE }} == "go" ]; then
             LANGUAGE_NAME="golang"
           else
-            LANGUAGE_NAME=${LANGUAGE}
+            LANGUAGE_NAME=${{ env.LANGUAGE }}
           fi
           # Look for the line starting with the tool name and get the second column
-          tool_version=$(grep "^${LANGUAGE_NAME} " "${tools_version_file}" | awk '{print $2}')
+          tool_version=$(grep "^${LANGUAGE_NAME} " "${{ env.TOOL_VERSIONS }}" | awk '{print $2}')
 
           if [ -z "$tool_version" ]; then
-            echo "::error::Tool '${LANGUAGE_NAME}' not found in ${tools_version_file}"
+            echo "::error::Tool '${LANGUAGE_NAME}' not found in ${{ env.TOOL_VERSIONS }}"
             exit 1
           fi
 
-          echo "${LANGUAGE}-version=${tool_version}" >> $GITHUB_OUTPUT
+          echo "${{ env.LANGUAGE }}-version=${tool_version}" >> $GITHUB_OUTPUT
 
           if [[ github.event_name == 'pull_request' ]]; then
             echo "This is a PR build. Docker image will not be pushed."
@@ -105,13 +105,13 @@ jobs:
             echo "docker-push=true" >> $GITHUB_OUTPUT
           fi
 
-          docker_tags="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:${{ github.sha }}"
+          docker_tags="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ env.APP_NAME }}:${{ github.sha }}"
           if [[ github.event_name == 'pull_request' ]]; then
             echo "This is a PR build. Docker image will be tagged with pr-${{ github.event.pull_request.number }}."
           else
             echo "This is a push to main. Docker image will be pushed with tags: ${{ steps.version.outputs.build-version }} and latest."
-            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:${{ steps.version.outputs.build-version }}"
-            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:latest"
+            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ env.APP_NAME }}:${{ steps.version.outputs.build-version }}"
+            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${{ env.APP_NAME }}:latest"
           fi
           echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
 
@@ -142,7 +142,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.3
-          working-directory: ./${APP_DIR}
+          working-directory: ./${{ env.APP_DIR }}
 
   test:
     name: "Build & Test"
@@ -150,7 +150,7 @@ jobs:
     needs: setup
     defaults:
       run:
-        working-directory: ${APP_DIR}
+        working-directory: ${{ env.APP_DIR }}
 
     steps:
       - uses: actions/checkout@v4
@@ -158,7 +158,7 @@ jobs:
       - name: "Build: Run Go CI"
         uses: mmastersvz/central-ci/actions/go-build-test@main
         with:
-          app-dir: ${APP_DIR}
+          app-dir: ${{ env.APP_DIR }}
 
       - name: "Docker: Build and Publish Image"
         uses: mmastersvz/central-ci/actions/docker-publish@main
@@ -166,8 +166,8 @@ jobs:
           registry-password: ${{ github.token }}
           docker-push: ${{ needs.setup.outputs.docker-push }}
           docker-tags: ${{ needs.setup.outputs.docker-tags }}
-          context: ./${APP_DIR}
-          cache-scope: ${APP_NAME}
+          context: ./${{ env.APP_DIR }}
+          cache-scope: ${{ env.APP_NAME }}
 
   # post-security-scans:
   #   name: "Post security scans"
@@ -178,5 +178,5 @@ jobs:
       - name: "Security: Trivy (container image)"
         uses: mmastersvz/central-ci/actions/trivy-image-scan@main
         with:
-          app-name: ${APP_NAME}
+          app-name: ${{ env.APP_NAME }}
           image-ref: ${{ needs.setup.outputs.docker-tags }}

@@ -8,12 +8,20 @@ import (
 )
 
 func helloHandler(w http.ResponseWriter, r *http.Request) {
-	fmt.Fprintln(w, "Hello from Go service!")
+	if _, err := fmt.Fprintln(w, "Hello from Go service!"); err != nil {
+		log.Printf("error writing response in helloHandler: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func healthHandler(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
-	fmt.Fprintln(w, "ok")
+	if _, err := fmt.Fprintln(w, "ok"); err != nil {
+		log.Printf("error writing response in healthHandler: %v", err)
+		http.Error(w, "internal server error", http.StatusInternalServerError)
+		return
+	}
 }
 
 func main() {
@@ -25,6 +33,10 @@ func main() {
 	http.HandleFunc("/", helloHandler)
 	http.HandleFunc("/health", healthHandler)
 
-	log.Printf("Go service listening on :%s", port)
-	log.Fatal(http.ListenAndServe(":"+port, nil))
+	addr := ":" + port
+	log.Printf("Go service listening on %s", addr)
+
+	if err := http.ListenAndServe(addr, nil); err != nil {
+		log.Fatalf("server failed: %v", err)
+	}
 }

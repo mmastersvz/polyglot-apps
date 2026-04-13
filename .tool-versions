@@ -4,3 +4,4 @@ python  3.13.12            # latest stable, released Feb 3 2026
 dotnet  8.0.419
 java    temurin-21.0.7+6.0.LTS
 maven   3.9.9              # latest stable Maven for the java-service build
+actionlint 1.7.12

@@ -1,0 +1,75 @@
+# .github/workflows/ci-python.yml
+#
+# Triggered ONLY when files under services/python-service/ change (path filtering).
+# Demonstrates: pip caching with virtualenv, matrix across Python versions, reusable release.
+
+name: "CI: python-service"
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "services/python-service/**"
+      - ".github/workflows/ci-python.yml"
+  pull_request:
+    paths:
+      - "services/python-service/**"
+      - ".github/workflows/ci-python.yml"
+
+  workflow_dispatch:
+
+concurrency:
+  group: ci-python-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ─────────────────────────────────────────────
+  # Matrix: test across Python versions
+  # ─────────────────────────────────────────────
+  test:
+    name: Test (Python ${{ matrix.python-version }})
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12"]
+      fail-fast: false
+    defaults:
+      run:
+        working-directory: services/python-service
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+          # Caches the pip download cache keyed on requirements.txt hash
+          cache: pip
+          cache-dependency-path: services/python-service/requirements.txt
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Lint (ruff)
+        run: |
+          pip install ruff
+          ruff check . --exit-zero
+
+      - name: Test
+        run: pytest -v --tb=short
+
+  # ─────────────────────────────────────────────
+  # Docker build/push + Release
+  # ─────────────────────────────────────────────
+  release:
+    name: Release
+    needs: test
+    uses: ./.github/workflows/reusable-service-release.yml
+    with:
+      service: python-service
+      image-name: python-service
+      working-directory: services/python-service
+      is-release: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
+    secrets:
+      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

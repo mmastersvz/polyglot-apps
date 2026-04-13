@@ -1,0 +1,168 @@
+# .github/workflows/reusable-service-release.yml
+#
+# Reusable workflow consumed by every per-service CI workflow.
+# Handles: Docker build/push, versioning (via central-ci), git tagging, changelog, and GitHub Release.
+#
+# Callers pass in the service name and image name; this workflow does the rest.
+
+name: "Reusable: Service Release"
+
+on:
+  workflow_call:
+    inputs:
+      service:
+        description: "Service directory name (e.g. go-service)"
+        required: true
+        type: string
+      image-name:
+        description: "Docker image name without registry (e.g. go-service)"
+        required: true
+        type: string
+      working-directory:
+        description: "Path to the service root from repo root"
+        required: true
+        type: string
+      is-release:
+        description: "true on main push, false on PR"
+        required: false
+        type: boolean
+        default: false
+    outputs:
+      new-tag:
+        description: "The computed version tag (e.g. go-service/v1.2.3)"
+        value: ${{ jobs.version.outputs.new-tag }}
+      image-tag:
+        description: "Full docker image tag that was pushed"
+        value: ${{ jobs.docker.outputs.image-tag }}
+    secrets:
+      GHCR_TOKEN:
+        required: true
+
+jobs:
+  # ─────────────────────────────────────────────
+  # 1. Compute version using central-ci
+  # ─────────────────────────────────────────────
+  version:
+    name: Resolve Version
+    runs-on: ubuntu-latest
+    outputs:
+      new-tag: ${{ steps.version.outputs.new-tag }}
+      previous-tag: ${{ steps.version.outputs.previous-tag }}
+      marketing-version: ${{ steps.version.outputs.marketing-version }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+
+    steps:
+      - name: Checkout (full history for tag walk)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Resolve version
+        id: version
+        uses: mmastersvz/central-ci/actions/resolve-version@v1
+        with:
+          service: ${{ inputs.service }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Print version summary
+        run: |
+          echo "### Version" >> $GITHUB_STEP_SUMMARY
+          echo "| Field | Value |" >> $GITHUB_STEP_SUMMARY
+          echo "|---|---|" >> $GITHUB_STEP_SUMMARY
+          echo "| new-tag | \`${{ steps.version.outputs.new-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| previous-tag | \`${{ steps.version.outputs.previous-tag }}\` |" >> $GITHUB_STEP_SUMMARY
+          echo "| is-prerelease | \`${{ steps.version.outputs.is-prerelease }}\` |" >> $GITHUB_STEP_SUMMARY
+
+  # ─────────────────────────────────────────────
+  # 2. Build and push Docker image
+  # ─────────────────────────────────────────────
+  docker:
+    name: Docker Build & Push
+    runs-on: ubuntu-latest
+    needs: version
+    outputs:
+      image-tag: ${{ steps.meta.outputs.tags }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GHCR_TOKEN }}
+
+      - name: Docker metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/${{ inputs.image-name }}
+          tags: |
+            # On PR: tag with pr-<number>
+            type=ref,event=pr,prefix=pr-
+            # On main: tag with the computed semver and also 'latest'
+            type=raw,value=${{ needs.version.outputs.marketing-version }},enable=${{ inputs.is-release }}
+            type=raw,value=latest,enable=${{ inputs.is-release }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v5
+        with:
+          context: ${{ inputs.working-directory }}
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          # Cache layers in the GitHub Actions cache
+          cache-from: type=gha,scope=${{ inputs.service }}
+          cache-to: type=gha,mode=max,scope=${{ inputs.service }}
+
+  # ─────────────────────────────────────────────
+  # 3. Tag, changelog, and GitHub Release (main only)
+  # ─────────────────────────────────────────────
+  release:
+    name: GitHub Release
+    runs-on: ubuntu-latest
+    needs: [version, docker]
+    if: inputs.is-release
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Configure git
+        uses: mmastersvz/central-ci/actions/setup-git-config@v1
+
+      - name: Push git tag
+        uses: mmastersvz/central-ci/actions/git-tag@v1
+        with:
+          new-tag: ${{ needs.version.outputs.new-tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Generate changelog
+        id: changelog
+        uses: mmastersvz/central-ci/actions/changelog@v1
+        with:
+          previous-tag: ${{ needs.version.outputs.previous-tag }}
+          new-tag: ${{ needs.version.outputs.new-tag }}
+
+      - name: Create GitHub Release
+        uses: mmastersvz/central-ci/actions/gh-release@v1
+        with:
+          tag: ${{ needs.version.outputs.new-tag }}
+          title: "${{ inputs.service }} ${{ needs.version.outputs.marketing-version }}"
+          notes: ${{ steps.changelog.outputs.notes }}
+          release-type: ${{ needs.version.outputs.release-type }}
+          previous-tag: ${{ needs.version.outputs.previous-tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move floating major tag
+        uses: mmastersvz/central-ci/actions/move-major-tag@v1
+        with:
+          tag: ${{ needs.version.outputs.new-tag }}
+          token: ${{ secrets.GITHUB_TOKEN }}

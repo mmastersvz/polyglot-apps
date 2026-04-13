@@ -14,7 +14,6 @@ on:
   workflow_dispatch:
 
 concurrency:
-  # group: ${{ github.event_name == 'pull_request' && github.run_id || 'go-service-main' }}
   group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.run_id || 'main' }}
   cancel-in-progress: false
 

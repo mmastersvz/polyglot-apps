@@ -1,8 +1,3 @@
-# .github/workflows/ci-go.yml
-#
-# Triggered ONLY when files under services/go-service/ change (path filtering).
-# Runs lint → test → calls the reusable release workflow.
-
 name: "CI: go-service"
 
 on:
@@ -16,7 +11,6 @@ on:
       - "services/go-service/**"
       - ".github/workflows/ci-go.yml"
 
-  # Allow manual trigger for debugging
   workflow_dispatch:
 
 concurrency:
@@ -24,15 +18,118 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  # ─────────────────────────────────────────────
-  # Lint + Test with Go module caching
-  # ─────────────────────────────────────────────
+
+
+  setup:
+    name: "Setup"
+    runs-on: ubuntu-latest
+    outputs:
+      app-dir: ${{ steps.setup-ci.outputs.app-dir }}
+      app-name: ${{ steps.setup-ci.outputs.app }}
+      build-version: ${{ steps.version.outputs.build-version }}
+      docker-push: ${{ steps.setup-ci.outputs.docker-push }}
+      # dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
+      go-version: ${{ steps.setup-ci.outputs.go-version }}
+      docker-tags: ${{ steps.setup-ci.outputs.docker-tags }}
+      project-path: ${{ steps.setup-ci.outputs.project-path }}
+
+    steps:
+      - name: "Checkout"
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: "Version"
+        id: version
+        uses: mmastersvz/central-ci/actions/resolve-version@main
+        with:
+          service: go-service
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      # must be after version step since it uses the build version to determine docker tags
+      - name: "Setup CI"
+        id: setup-ci
+        env:
+          APP_NAME: go-service
+          APP_DIR: services/go-service
+          PROJECT_PATH: .
+          LANGUAGE: go
+          tools_version_file: ./.tools-versions
+        run: |
+          echo "app-name=${APP_NAME}" >> $GITHUB_OUTPUT
+          echo "app-dir=${APP_DIR}" >> $GITHUB_OUTPUT
+          echo "project-path=${PROJECT_PATH}" >> $GITHUB_OUTPUT
+
+          # Look for the line starting with the tool name and get the second column
+          tool_version=$(grep "^${LANGUAGE} " "${tools_version_file}" | awk '{print $2}')
+
+          if [ -z "$tool_version" ]; then
+            echo "::error::Tool '${LANGUAGE}' not found in ${tools_version_file}"
+            exit 1
+          fi
+
+          echo "${LANGUAGE}-version=${tool_version}" >> $GITHUB_OUTPUT
+
+          if [[ github.event_name == 'pull_request' ]]; then
+            echo "This is a PR build. Docker image will not be pushed."
+            echo "docker-push=false" >> $GITHUB_OUTPUT
+          else
+            echo "This is a push to main. Docker image will be pushed."
+            echo "docker-push=true" >> $GITHUB_OUTPUT
+          fi
+
+          docker_tags="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:${{ github.sha }}"
+          if [[ github.event_name == 'pull_request' ]]; then
+            echo "This is a PR build. Docker image will be tagged with pr-${{ github.event.pull_request.number }}."
+          else
+            echo "This is a push to main. Docker image will be pushed with tags: ${{ steps.version.outputs.build-version }} and latest."
+            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:${{ steps.version.outputs.build-version }}"
+            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:latest"
+          fi
+          echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
+
+      - name: Scan for Secrets
+        uses: mmastersvz/central-ci/actions/secret-scan@main
+
+      # TODO: Add super-linter for Go (golangci-lint) and add caching for it
+
+      # - name: "Cache: Super-Linter Docker layers"
+      #   uses: actions/cache@v4
+      #   with:
+      #     path: /tmp/.buildx-cache
+      #     key: ${{ runner.os }}-superlinter-${{ github.sha }}
+      #     restore-keys: |
+      #       ${{ runner.os }}-superlinter-
+
+      # - name: "Lint: Code Base"
+      #   uses: super-linter/super-linter@v8
+      #   env:
+      #     VALIDATE_ALL_CODEBASE: true # false TODO: Only lint changes (faster)
+      #     VALIDATE_CSHARP: true
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #     FILTER_REGEX_INCLUDE: .*${{ steps.setup-ci.outputs.app-dir }}/.*
+
+      # - name: "Setup: .NET"
+      #   uses: actions/setup-dotnet@v4
+      #   with:
+      #     dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
+
+      # - name: "Lint: Dotnet Format"
+      #   run: dotnet format ${{ steps.setup-ci.outputs.app-dir }} --verify-no-changes
+
+      - name: "Security Scan: Trivy (source code)"
+        uses: mmastersvz/central-ci/actions/trivy-source-scan@main
+        with:
+          app-name: ${{ steps.setup-ci.outputs.app-name }}
+          scan-ref: ${{ steps.setup-ci.outputs.app-dir }}
+
   test:
     name: Lint & Test
     runs-on: ubuntu-latest
+    needs: setup
     defaults:
       run:
-        working-directory: services/go-service
+        working-directory: ${{ needs.setup.outputs.app-dir}}
 
     steps:
       - uses: actions/checkout@v4
@@ -40,9 +137,9 @@ jobs:
       - name: Set up Go
         uses: actions/setup-go@v5
         with:
-          go-version-file: services/go-service/go.mod
+          go-version-file: ${{ needs.setup.outputs.app-dir}}/go.mod
           # Caches both the module download cache and the build cache
-          cache-dependency-path: services/go-service/go.sum
+          cache-dependency-path: ${{ needs.setup.outputs.app-dir}}/go.sum
 
       - name: Download modules
         run: go mod download
@@ -57,20 +154,30 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: go-coverage
-          path: services/go-service/coverage.out
+          path: ${{ needs.setup.outputs.app-dir}}/coverage.out
           retention-days: 7
 
-  # ─────────────────────────────────────────────
-  # Docker build/push + Release via reusable workflow
-  # ─────────────────────────────────────────────
-  release:
-    name: Release
-    needs: test
-    uses: ./.github/workflows/reusable-service-release.yml
-    with:
-      service: go-service
-      image-name: go-service
-      working-directory: services/go-service
-      is-release: ${{ github.ref == 'refs/heads/main' && github.event_name == 'push' }}
-    secrets:
-      GHCR_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Build
+        run: go build -o app -v ./...
+
+      - name: "Docker: Build and Publish Image"
+        uses: mmastersvz/central-ci/actions/docker-publish@main
+        with:
+          registry-password: ${{ github.token }}
+          docker-push: ${{ needs.setup.outputs.docker-push }}
+          docker-tags: ${{ needs.setup.outputs.docker-tags }}
+          context: ./${{ needs.setup.outputs.app-dir }}
+          cache-scope: ${{ needs.setup.outputs.app-name }}
+
+  # security:
+  #   name: "Security"
+  #   runs-on: ubuntu-latest
+  #   needs: [setup, build]
+  #   steps:
+
+      - name: "Security: Trivy (container image)"
+        uses: mmastersvz/central-ci/actions/trivy-image-scan@main
+        with:
+          app-name: ${{ needs.setup.outputs.app-name }}
+          image-ref: ${{ needs.setup.outputs.docker-tags }}
+

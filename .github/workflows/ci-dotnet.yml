@@ -40,7 +40,7 @@ jobs:
     name: "Setup"
     runs-on: ubuntu-latest
     outputs:
-      build-version: ${{ steps.setup-app.outputs.version }}
+      build-version: ${{ steps.prep.outputs.version }}
       docker-push: ${{ steps.setup-docker.outputs.docker-push }}
       dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
       docker-tags: ${{ steps.setup-docker.outputs.docker-tags }}
@@ -104,6 +104,20 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      - name: "Debug: vars"
+        run: |
+          echo "APP_NAME: ${{ env.APP_NAME }}"
+          echo "APP_DIR: ${{ env.APP_DIR }}"
+          echo "PROJECT_PATH: ${{ env.PROJECT_PATH }}"
+          echo "LANGUAGE: ${{ env.LANGUAGE }}"
+          echo "TOOL_VERSIONS: ${{ env.TOOL_VERSIONS }}"
+
+          echo "build-version: ${{ needs.setup.outputs.build-version }}"
+          echo "dotnet-version: ${{ needs.setup.outputs.dotnet-version }}"
+          echo "docker-push: ${{ needs.setup.outputs.docker-push }}"
+          echo "docker-tags: ${{ needs.setup.outputs.docker-tags }}"
+
 
       # - name: "Setup: .NET"
       #   uses: actions/setup-dotnet@v4

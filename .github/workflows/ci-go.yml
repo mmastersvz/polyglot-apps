@@ -49,14 +49,11 @@ jobs:
     name: "Setup"
     runs-on: ubuntu-latest
     outputs:
-      app-dir: ${{ steps.setup-ci.outputs.app-dir }}
-      app-name: ${{ steps.setup-ci.outputs.app }}
       build-version: ${{ steps.version.outputs.build-version }}
       docker-push: ${{ steps.setup-ci.outputs.docker-push }}
       # dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
       go-version: ${{ steps.setup-ci.outputs.go-version }}
       docker-tags: ${{ steps.setup-ci.outputs.docker-tags }}
-      project-path: ${{ steps.setup-ci.outputs.project-path }}
 
     steps:
       - name: "Checkout"
@@ -85,10 +82,6 @@ jobs:
         #   LANGUAGE: go
         #   tools_version_file: ./.tool-versions
         run: |
-          echo "app-name=${APP_NAME}" >> $GITHUB_OUTPUT
-          echo "app-dir=${APP_DIR}" >> $GITHUB_OUTPUT
-          echo "project-path=${PROJECT_PATH}" >> $GITHUB_OUTPUT
-
           if [ ${LANGUAGE} == "go" ]; then
             LANGUAGE_NAME="golang"
           else
@@ -149,6 +142,7 @@ jobs:
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.3
+          working-directory: ./${APP_DIR}
 
   test:
     name: "Build & Test"
@@ -156,7 +150,7 @@ jobs:
     needs: setup
     defaults:
       run:
-        working-directory: ${{ needs.setup.outputs.app-dir}}
+        working-directory: ${APP_DIR}
 
     steps:
       - uses: actions/checkout@v4
@@ -164,7 +158,7 @@ jobs:
       - name: "Build: Run Go CI"
         uses: mmastersvz/central-ci/actions/go-build-test@main
         with:
-          app-dir: ${{ needs.setup.outputs.app-dir }}
+          app-dir: ${APP_DIR}
 
       - name: "Docker: Build and Publish Image"
         uses: mmastersvz/central-ci/actions/docker-publish@main
@@ -172,8 +166,8 @@ jobs:
           registry-password: ${{ github.token }}
           docker-push: ${{ needs.setup.outputs.docker-push }}
           docker-tags: ${{ needs.setup.outputs.docker-tags }}
-          context: ./${{ needs.setup.outputs.app-dir }}
-          cache-scope: ${{ needs.setup.outputs.app-name }}
+          context: ./${APP_DIR}
+          cache-scope: ${APP_NAME}
 
   # post-security-scans:
   #   name: "Post security scans"
@@ -184,6 +178,5 @@ jobs:
       - name: "Security: Trivy (container image)"
         uses: mmastersvz/central-ci/actions/trivy-image-scan@main
         with:
-          app-name: ${{ needs.setup.outputs.app-name }}
+          app-name: ${APP_NAME}
           image-ref: ${{ needs.setup.outputs.docker-tags }}
-

@@ -76,13 +76,14 @@ jobs:
           fi
           echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
 
-      # - name: "Security: Secret Detection (TruffleHog)"
-      #   uses: trufflesecurity/trufflehog@v3.94.3
-      #   with:
-      #     path: ./
-      #     base: ${{ github.event.pull_request.base.sha || github.sha }}
-      #     head: HEAD
-      #     extra_args: --fail --results=verified,unknown
+      - name: "Security: Secret Detection (TruffleHog)"
+        uses: trufflesecurity/trufflehog@v3.94.3
+        with:
+          # path: ./
+          base: ${{ github.event.pull_request.base.sha || github.sha }}
+          head: HEAD
+          extra_args: --results=verified,unknown
+          # extra_args: --fail --results=verified,unknown
 
       # - name: "Cache: Super-Linter Docker layers"
       #   uses: actions/cache@v4

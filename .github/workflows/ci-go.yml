@@ -31,19 +31,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
 
-      - name: "Checkout"
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: Scan for Secrets
-        uses: mmastersvz/central-ci/actions/secret-scan@main
-
-      - name: "Security Scan: Trivy (source code)"
-        uses: mmastersvz/central-ci/actions/trivy-source-scan@main
+      - name: "Security: Initial Security Suite"
+        uses: mmastersvz/central-ci/actions/security-init-scans@main
         with:
           app-name: ${{ env.APP_NAME }}
-          scan-ref: ${{ env.APP_DIR }}
+          app-dir: ${{ env.APP_DIR }}
 
   setup:
     name: "Setup"
@@ -75,12 +67,6 @@ jobs:
       # must be after version step since it uses the build version to determine docker tags
       - name: "Setup CI"
         id: setup-ci
-        # env:
-        #   APP_NAME: go-service
-        #   APP_DIR: services/go-service
-        #   PROJECT_PATH: .
-        #   LANGUAGE: go
-        #   TOOL_VERSIONS: ./.tool-versions
         run: |
           if [ ${{ env.LANGUAGE }} == "go" ]; then
             LANGUAGE_NAME="golang"
@@ -115,36 +101,13 @@ jobs:
           fi
           echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
 
-      # TODO: Add super-linter for Go (golangci-lint) and add caching for it
-
-      # - name: "Cache: Super-Linter Docker layers"
-      #   uses: actions/cache@v4
-      #   with:
-      #     path: /tmp/.buildx-cache
-      #     key: ${{ runner.os }}-superlinter-${{ github.sha }}
-      #     restore-keys: |
-      #       ${{ runner.os }}-superlinter-
-
-      # - name: "Lint: Code Base"
-      #   uses: super-linter/super-linter@v8
-      #   env:
-      #     VALIDATE_ALL_CODEBASE: true # false TODO: Only lint changes (faster)
-      #     VALIDATE_CSHARP: true
-      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     FILTER_REGEX_INCLUDE: .*${{ steps.setup-ci.outputs.app-dir }}/.*
-
-      # - name: "Setup: .NET"
-      #   uses: actions/setup-dotnet@v4
-      #   with:
-      #     dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
-
       - name: "Lint: golang"
         uses: golangci/golangci-lint-action@v9
         with:
           version: v2.3
           working-directory: ./${{ env.APP_DIR }}
 
-  test:
+  build:
     name: "Build & Test"
     runs-on: ubuntu-latest
     needs: setup

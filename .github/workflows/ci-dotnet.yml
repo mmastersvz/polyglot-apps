@@ -14,8 +14,15 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-dotnet-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && github.run_id || 'dotnet-service-main' }}
+  cancel-in-progress: false
+
+env:
+  APP_NAME: dotnet-service
+  APP_DIR: services/dotnet-service
+  PROJECT_PATH: src/DotnetService
+  LANGUAGE: dotnet
+  TOOL_VERSIONS: ./.tool-versions
 
 jobs:
 
@@ -23,13 +30,10 @@ jobs:
     name: "Setup"
     runs-on: ubuntu-latest
     outputs:
-      app-dir: ${{ steps.setup-ci.outputs.app-dir }}
-      app-name: ${{ steps.setup-ci.outputs.app }}
-      build-version: ${{ steps.version.outputs.build-version }}
-      docker-push: ${{ steps.setup-ci.outputs.docker-push }}
-      dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
-      docker-tags: ${{ steps.setup-ci.outputs.docker-tags }}
-      project-path: ${{ steps.setup-ci.outputs.project-path }}
+      build-version: ${{ steps.prep.outputs.version }}
+      docker-push: ${{ steps.setup-docker.outputs.docker-push }}
+      dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
+      docker-tags: ${{ steps.setup-docker.outputs.docker-tags }}
 
     steps:
       - name: "Checkout"
@@ -37,44 +41,34 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: "Version"
-        id: version
-        uses: mmastersvz/central-ci/actions/resolve-version@main
+      - name: "Setup: CI"
+        id: prep
+        uses: mmastersvz/central-ci/actions/setup@main
         with:
-          service: dotnet-service
-          token: ${{ secrets.GITHUB_TOKEN }}
+          service-name: ${{ env.APP_NAME }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-      # must be after version step since it uses the build version to determine docker tags
-      - name: "Setup CI"
-        id: setup-ci
-        env:
-          APP_NAME: dotnet-service
-          APP_DIR: services/dotnet-service
-          PROJECT_PATH: src/DotnetService
-          DOTNET_VERSION: 8.0.x
+      - name: "Setup: APP"
+        id: setup-app
+        shell: bash
         run: |
-          echo "app-name=${APP_NAME}" >> $GITHUB_OUTPUT
-          echo "app-dir=${APP_DIR}" >> $GITHUB_OUTPUT
-          echo "project-path=${PROJECT_PATH}" >> $GITHUB_OUTPUT
-          echo "dotnet-version=${DOTNET_VERSION}" >> $GITHUB_OUTPUT
+          # Resolve Language Name
+          LANG_NAME="${{ env.LANGUAGE }}"
 
-          if [[ github.event_name == 'pull_request' ]]; then
-            echo "This is a PR build. Docker image will not be pushed."
-            echo "docker-push=false" >> $GITHUB_OUTPUT
-          else
-            echo "This is a push to main. Docker image will be pushed."
-            echo "docker-push=true" >> $GITHUB_OUTPUT
+          # Parse tool version
+          tool_version=$(grep "^${LANG_NAME} " "${{ env.TOOL_VERSIONS }}" | awk '{print $2}')
+          if [ -z "$tool_version" ]; then
+            echo "::errlatestor::Tool '${LANG_NAME}' not found in ${{ env.TOOL_VERSIONS }}"
+            exit 1
           fi
+          echo "dotnet-version=${tool_version}" >> $GITHUB_OUTPUT
 
-          docker_tags="ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:${{ github.sha }}"
-          if [[ github.event_name == 'pull_request' ]]; then
-            echo "This is a PR build. Docker image will be tagged with pr-${{ github.event.pull_request.number }}."
-          else
-            echo "This is a push to main. Docker image will be pushed with tags: ${{ steps.version.outputs.build-version }} and latest."
-            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:${{ steps.version.outputs.build-version }}"
-            docker_tags="${docker_tags},ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}/${APP_NAME}:latest"
-          fi
-          echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
+      - name: "Setup: Docker Metadata"
+        id: setup-docker
+        uses: mmastersvz/central-ci/actions/setup-docker@main
+        with:
+          app-name: ${{ env.APP_NAME }}
+          app-version: ${{ steps.setup-app.outputs.version }}
 
       - name: Scan for Secrets
         uses: mmastersvz/central-ci/actions/secret-scan@main
@@ -93,7 +87,7 @@ jobs:
       #     VALIDATE_ALL_CODEBASE: true # false TODO: Only lint changes (faster)
       #     VALIDATE_CSHARP: true
       #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      #     FILTER_REGEX_INCLUDE: .*${{ steps.setup-ci.outputs.app-dir }}/.*
+      #     FILTER_REGEX_INCLUDE: .*${{ env.APP_DIR }}/.*
 
       - name: "Setup: .NET"
         uses: actions/setup-dotnet@v4
@@ -101,13 +95,13 @@ jobs:
           dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
 
       - name: "Lint: Dotnet Format"
-        run: dotnet format ${{ steps.setup-ci.outputs.app-dir }} --verify-no-changes
+        run: dotnet format ${{ env.APP_DIR }} --verify-no-changes
 
       - name: "Security Scan: Trivy (source code)"
         uses: mmastersvz/central-ci/actions/trivy-source-scan@main
         with:
-          app-name: ${{ steps.setup-ci.outputs.app-name }}
-          scan-ref: ${{ steps.setup-ci.outputs.app-dir }}
+          app-name: ${{ env.APP_NAME }}
+          scan-ref: ${{ env.APP_DIR }}
 
       # - name: "Setup git config"
       #   uses: mmastersvz/central-ci/actions/setup-git-config@main
@@ -118,7 +112,7 @@ jobs:
     needs: setup
     defaults:
       run:
-        working-directory: ${{ needs.setup.outputs.app-dir }}
+        working-directory: ${{ env.APP_DIR }}
 
     steps:
       - uses: actions/checkout@v4
@@ -143,8 +137,8 @@ jobs:
         with:
           build-version: ${{ needs.setup.outputs.build-version }}
           dotnet-version: ${{ needs.setup.outputs.dotnet-version }}
-          project-path: ${{ needs.setup.outputs.project-path }}
-          working-directory: ${{ needs.setup.outputs.app-dir }}
+          project-path: ${{ env.PROJECT_PATH }}
+          working-directory: ${{ env.APP_DIR }}
 
       - name: "Docker: Build and Publish Image"
         uses: mmastersvz/central-ci/actions/docker-publish@main
@@ -152,8 +146,8 @@ jobs:
           registry-password: ${{ github.token }}
           docker-push: ${{ needs.setup.outputs.docker-push }}
           docker-tags: ${{ needs.setup.outputs.docker-tags }}
-          context: ./${{ needs.setup.outputs.app-dir }}
-          cache-scope: ${{ needs.setup.outputs.app-name }}
+          context: ./${{ env.APP_DIR }}
+          cache-scope: ${{ env.APP_NAME }}
 
   # security:
   #   name: "Security"
@@ -164,5 +158,5 @@ jobs:
       - name: "Security: Trivy (container image)"
         uses: mmastersvz/central-ci/actions/trivy-image-scan@main
         with:
-          app-name: ${{ needs.setup.outputs.app-name }}
+          app-name: ${{ env.APP_NAME }}
           image-ref: ${{ needs.setup.outputs.docker-tags }}

@@ -40,7 +40,7 @@ jobs:
     name: "Setup"
     runs-on: ubuntu-latest
     outputs:
-      build-version: ${{ steps.prep.outputs.version }}
+      build-version: ${{ steps.setup-app.outputs.version }}
       docker-push: ${{ steps.setup-docker.outputs.docker-push }}
       dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
       docker-tags: ${{ steps.setup-docker.outputs.docker-tags }}
@@ -83,7 +83,7 @@ jobs:
       - name: "Setup: .NET"
         uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
+          dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
 
       - name: "Lint: Dotnet Format"
         run: dotnet format ${{ env.APP_DIR }} --verify-no-changes

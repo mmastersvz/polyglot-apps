@@ -26,7 +26,8 @@ jobs:
       app-name:     dotnet-service
       app-dir:      services/dotnet-service
       project-path: src/DotnetService
-    secrets: inherit
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}
 
 
 # env:

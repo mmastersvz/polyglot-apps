@@ -14,10 +14,36 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ci-go-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.event_name == 'pull_request' && github.run_id || 'release-main' }}
+  cancel-in-progress: false
+
+env:
+  APP_NAME: go-service
+  APP_DIR: services/go-service
+  PROJECT_PATH: .
+  LANGUAGE: go
+  tools_version_file: ./.tool-versions
 
 jobs:
+
+  init-security-scans:
+    name: "Initial security scans"
+    runs-on: ubuntu-latest
+    steps:
+
+      - name: "Checkout"
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Scan for Secrets
+        uses: mmastersvz/central-ci/actions/secret-scan@main
+
+      - name: "Security Scan: Trivy (source code)"
+        uses: mmastersvz/central-ci/actions/trivy-source-scan@main
+        with:
+          app-name: ${APP_NAME}
+          scan-ref: ${APP_DIR}
 
   setup:
     name: "Setup"
@@ -38,6 +64,10 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Capture commit SHA
+        id: sha
+        run: echo "commit_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
       - name: "Version"
         id: version
         uses: mmastersvz/central-ci/actions/resolve-version@main
@@ -48,12 +78,12 @@ jobs:
       # must be after version step since it uses the build version to determine docker tags
       - name: "Setup CI"
         id: setup-ci
-        env:
-          APP_NAME: go-service
-          APP_DIR: services/go-service
-          PROJECT_PATH: .
-          LANGUAGE: go
-          tools_version_file: ./.tool-versions
+        # env:
+        #   APP_NAME: go-service
+        #   APP_DIR: services/go-service
+        #   PROJECT_PATH: .
+        #   LANGUAGE: go
+        #   tools_version_file: ./.tool-versions
         run: |
           echo "app-name=${APP_NAME}" >> $GITHUB_OUTPUT
           echo "app-dir=${APP_DIR}" >> $GITHUB_OUTPUT
@@ -92,9 +122,6 @@ jobs:
           fi
           echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
 
-      - name: Scan for Secrets
-        uses: mmastersvz/central-ci/actions/secret-scan@main
-
       # TODO: Add super-linter for Go (golangci-lint) and add caching for it
 
       # - name: "Cache: Super-Linter Docker layers"
@@ -121,12 +148,6 @@ jobs:
       # - name: "Lint: Dotnet Format"
       #   run: dotnet format ${{ steps.setup-ci.outputs.app-dir }} --verify-no-changes
 
-      - name: "Security Scan: Trivy (source code)"
-        uses: mmastersvz/central-ci/actions/trivy-source-scan@main
-        with:
-          app-name: ${{ steps.setup-ci.outputs.app-name }}
-          scan-ref: ${{ steps.setup-ci.outputs.app-dir }}
-
   test:
     name: "Build & Test"
     runs-on: ubuntu-latest
@@ -138,31 +159,11 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Set up Go
-        uses: actions/setup-go@v5
+      - name: "Build: Run Go CI"
+        uses: mmastersvz/central-ci/actions/go-build-test@main
         with:
-          go-version-file: ${{ needs.setup.outputs.app-dir}}/go.mod
-          # Caches both the module download cache and the build cache
-          cache-dependency-path: ${{ needs.setup.outputs.app-dir}}/go.sum
+          app-dir: ${{ needs.setup.outputs.app-dir }}
 
-      - name: Download modules
-        run: go mod download
-
-      - name: Vet
-        run: go vet ./...
-
-      - name: Test
-        run: go test -v -race -coverprofile=coverage.out ./...
-
-      - name: Upload coverage artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: go-coverage
-          path: ${{ needs.setup.outputs.app-dir}}/coverage.out
-          retention-days: 7
-
-      - name: Build
-        run: go build -o app -v ./...
 
       - name: "Docker: Build and Publish Image"
         uses: mmastersvz/central-ci/actions/docker-publish@main

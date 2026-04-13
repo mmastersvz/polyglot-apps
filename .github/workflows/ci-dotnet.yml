@@ -17,149 +17,160 @@ concurrency:
   group: ${{ github.event_name == 'pull_request' && github.run_id || 'dotnet-service-main' }}
   cancel-in-progress: false
 
-env:
-  APP_NAME: dotnet-service
-  APP_DIR: services/dotnet-service
-  PROJECT_PATH: src/DotnetService
-  LANGUAGE: dotnet
-  TOOL_VERSIONS: ./.tool-versions
 
 jobs:
-
-  init-security-scans:
-    name: "Initial security scans"
-    runs-on: ubuntu-latest
-    steps:
-      - name: "Security: Initial Security Suite"
-        uses: mmastersvz/central-ci/actions/security-init-scans@main
-        with:
-          app-name: ${{ env.APP_NAME }}
-          app-dir: ${{ env.APP_DIR }}
-
-  setup:
-    name: "Setup"
-    runs-on: ubuntu-latest
-    outputs:
-      build-version: ${{ steps.prep.outputs.build-version }}
-      docker-push: ${{ steps.setup-docker.outputs.docker-push }}
-      dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
-      docker-tags: ${{ steps.setup-docker.outputs.docker-tags }}
-
-    steps:
-      - name: "Checkout"
-        uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-
-      - name: "Setup: CI"
-        id: prep
-        uses: mmastersvz/central-ci/actions/setup@main
-        with:
-          service-name: ${{ env.APP_NAME }}
-          github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: "Setup: APP"
-        id: setup-app
-        shell: bash
-        run: |
-          # Resolve Language Name
-          LANG_NAME="${{ env.LANGUAGE }}"
-
-          # Parse tool version
-          tool_version=$(grep "^${LANG_NAME} " "${{ env.TOOL_VERSIONS }}" | awk '{print $2}')
-          if [ -z "$tool_version" ]; then
-            echo "::errlatestor::Tool '${LANG_NAME}' not found in ${{ env.TOOL_VERSIONS }}"
-            exit 1
-          fi
-          echo "dotnet-version=${tool_version}" >> $GITHUB_OUTPUT
-
-      - name: "Setup: Docker Metadata"
-        id: setup-docker
-        uses: mmastersvz/central-ci/actions/setup-docker@main
-        with:
-          app-name: ${{ env.APP_NAME }}
-          app-version: ${{ steps.prep.outputs.build-version }}
-
-      - name: "Setup: .NET"
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
-
-      - name: "Lint: Dotnet Format"
-        run: dotnet format ${{ env.APP_DIR }} --verify-no-changes
-
-      - name: "Security Scan: Trivy (source code)"
-        uses: mmastersvz/central-ci/actions/trivy-source-scan@main
-        with:
-          app-name: ${{ env.APP_NAME }}
-          scan-ref: ${{ env.APP_DIR }}
-
-  build:
-    name: "Build & Test"
-    runs-on: ubuntu-latest
-    needs: setup
-    defaults:
-      run:
-        working-directory: ${{ env.APP_DIR }}
-
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: "Debug: vars"
-        run: |
-          echo "APP_NAME: ${{ env.APP_NAME }}"
-          echo "APP_DIR: ${{ env.APP_DIR }}"
-          echo "PROJECT_PATH: ${{ env.PROJECT_PATH }}"
-          echo "LANGUAGE: ${{ env.LANGUAGE }}"
-          echo "TOOL_VERSIONS: ${{ env.TOOL_VERSIONS }}"
-
-          echo "build-version: ${{ needs.setup.outputs.build-version }}"
-          echo "dotnet-version: ${{ needs.setup.outputs.dotnet-version }}"
-          echo "docker-push: ${{ needs.setup.outputs.docker-push }}"
-          echo "docker-tags: ${{ needs.setup.outputs.docker-tags }}"
+  ci:
+    uses: mmastersvz/central-ci/.github/workflows/lib-ci-dotnet.yml@main
+    with:
+      app-name:     dotnet-service
+      app-dir:      services/dotnet-service
+      project-path: src/DotnetService
+    secrets: inherit
 
 
-      # - name: "Setup: .NET"
-      #   uses: actions/setup-dotnet@v4
-      #   with:
-      #     dotnet-version: ${{ needs.setup.outputs.dotnet-version }}
+# env:
+#   APP_NAME: dotnet-service
+#   APP_DIR: services/dotnet-service
+#   PROJECT_PATH: src/DotnetService
+#   LANGUAGE: dotnet
+#   TOOL_VERSIONS: ./.tool-versions
 
-      # NuGet packages are cached by the NuGet global packages folder path + lock file hash.
-      # This avoids re-downloading packages on every run.
-      - name: "Cache: NuGet packages"
-        uses: actions/cache@v4
-        with:
-          path: ~/.nuget/packages
-          key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
-          restore-keys: |
-            nuget-${{ runner.os }}-
+# jobs:
 
-      - name: "Build: .NET and Test"
-        uses: mmastersvz/central-ci/actions/dotnet-build-test@main
-        with:
-          build-version: ${{ needs.setup.outputs.build-version }}
-          dotnet-version: ${{ needs.setup.outputs.dotnet-version }}
-          project-path: ${{ env.PROJECT_PATH }}
-          working-directory: ${{ env.APP_DIR }}
+#   init-security-scans:
+#     name: "Initial security scans"
+#     runs-on: ubuntu-latest
+#     steps:
+#       - name: "Security: Initial Security Suite"
+#         uses: mmastersvz/central-ci/actions/security-init-scans@main
+#         with:
+#           app-name: ${{ env.APP_NAME }}
+#           app-dir: ${{ env.APP_DIR }}
 
-      - name: "Docker: Build and Publish Image"
-        uses: mmastersvz/central-ci/actions/docker-publish@main
-        with:
-          registry-password: ${{ github.token }}
-          docker-push: ${{ needs.setup.outputs.docker-push }}
-          docker-tags: ${{ needs.setup.outputs.docker-tags }}
-          context: ./${{ env.APP_DIR }}
-          cache-scope: ${{ env.APP_NAME }}
+#   setup:
+#     name: "Setup"
+#     runs-on: ubuntu-latest
+#     outputs:
+#       build-version: ${{ steps.prep.outputs.build-version }}
+#       docker-push: ${{ steps.setup-docker.outputs.docker-push }}
+#       dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
+#       docker-tags: ${{ steps.setup-docker.outputs.docker-tags }}
 
-  # security:
-  #   name: "Security"
-  #   runs-on: ubuntu-latest
-  #   needs: [setup, build]
-  #   steps:
+#     steps:
+#       - name: "Checkout"
+#         uses: actions/checkout@v6
+#         with:
+#           fetch-depth: 0
 
-      - name: "Security: Trivy (container image)"
-        if: ${{ needs.setup.outputs.docker-push == 'true' }}
-        uses: mmastersvz/central-ci/actions/trivy-image-scan@main
-        with:
-          app-name: ${{ env.APP_NAME }}
-          image-ref: ${{ needs.setup.outputs.docker-tags }}
+#       - name: "Setup: CI"
+#         id: prep
+#         uses: mmastersvz/central-ci/actions/setup@main
+#         with:
+#           service-name: ${{ env.APP_NAME }}
+#           github-token: ${{ secrets.GITHUB_TOKEN }}
+
+#       - name: "Setup: APP"
+#         id: setup-app
+#         shell: bash
+#         run: |
+#           # Resolve Language Name
+#           LANG_NAME="${{ env.LANGUAGE }}"
+
+#           # Parse tool version
+#           tool_version=$(grep "^${LANG_NAME} " "${{ env.TOOL_VERSIONS }}" | awk '{print $2}')
+#           if [ -z "$tool_version" ]; then
+#             echo "::errlatestor::Tool '${LANG_NAME}' not found in ${{ env.TOOL_VERSIONS }}"
+#             exit 1
+#           fi
+#           echo "dotnet-version=${tool_version}" >> $GITHUB_OUTPUT
+
+#       - name: "Setup: Docker Metadata"
+#         id: setup-docker
+#         uses: mmastersvz/central-ci/actions/setup-docker@main
+#         with:
+#           app-name: ${{ env.APP_NAME }}
+#           app-version: ${{ steps.prep.outputs.build-version }}
+
+#       - name: "Setup: .NET"
+#         uses: actions/setup-dotnet@v4
+#         with:
+#           dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
+
+#       - name: "Lint: Dotnet Format"
+#         run: dotnet format ${{ env.APP_DIR }} --verify-no-changes
+
+#       - name: "Security Scan: Trivy (source code)"
+#         uses: mmastersvz/central-ci/actions/trivy-source-scan@main
+#         with:
+#           app-name: ${{ env.APP_NAME }}
+#           scan-ref: ${{ env.APP_DIR }}
+
+#   build:
+#     name: "Build & Test"
+#     runs-on: ubuntu-latest
+#     needs: setup
+#     defaults:
+#       run:
+#         working-directory: ${{ env.APP_DIR }}
+
+#     steps:
+#       - uses: actions/checkout@v4
+
+#       - name: "Debug: vars"
+#         run: |
+#           echo "APP_NAME: ${{ env.APP_NAME }}"
+#           echo "APP_DIR: ${{ env.APP_DIR }}"
+#           echo "PROJECT_PATH: ${{ env.PROJECT_PATH }}"
+#           echo "LANGUAGE: ${{ env.LANGUAGE }}"
+#           echo "TOOL_VERSIONS: ${{ env.TOOL_VERSIONS }}"
+
+#           echo "build-version: ${{ needs.setup.outputs.build-version }}"
+#           echo "dotnet-version: ${{ needs.setup.outputs.dotnet-version }}"
+#           echo "docker-push: ${{ needs.setup.outputs.docker-push }}"
+#           echo "docker-tags: ${{ needs.setup.outputs.docker-tags }}"
+
+
+#       # - name: "Setup: .NET"
+#       #   uses: actions/setup-dotnet@v4
+#       #   with:
+#       #     dotnet-version: ${{ needs.setup.outputs.dotnet-version }}
+
+#       # NuGet packages are cached by the NuGet global packages folder path + lock file hash.
+#       # This avoids re-downloading packages on every run.
+#       - name: "Cache: NuGet packages"
+#         uses: actions/cache@v4
+#         with:
+#           path: ~/.nuget/packages
+#           key: nuget-${{ runner.os }}-${{ hashFiles('**/packages.lock.json', '**/*.csproj') }}
+#           restore-keys: |
+#             nuget-${{ runner.os }}-
+
+#       - name: "Build: .NET and Test"
+#         uses: mmastersvz/central-ci/actions/dotnet-build-test@main
+#         with:
+#           build-version: ${{ needs.setup.outputs.build-version }}
+#           dotnet-version: ${{ needs.setup.outputs.dotnet-version }}
+#           project-path: ${{ env.PROJECT_PATH }}
+#           working-directory: ${{ env.APP_DIR }}
+
+#       - name: "Docker: Build and Publish Image"
+#         uses: mmastersvz/central-ci/actions/docker-publish@main
+#         with:
+#           registry-password: ${{ github.token }}
+#           docker-push: ${{ needs.setup.outputs.docker-push }}
+#           docker-tags: ${{ needs.setup.outputs.docker-tags }}
+#           context: ./${{ env.APP_DIR }}
+#           cache-scope: ${{ env.APP_NAME }}
+
+#   # security:
+#   #   name: "Security"
+#   #   runs-on: ubuntu-latest
+#   #   needs: [setup, build]
+#   #   steps:
+
+#       - name: "Security: Trivy (container image)"
+#         if: ${{ needs.setup.outputs.docker-push == 'true' }}
+#         uses: mmastersvz/central-ci/actions/trivy-image-scan@main
+#         with:
+#           app-name: ${{ env.APP_NAME }}
+#           image-ref: ${{ needs.setup.outputs.docker-tags }}

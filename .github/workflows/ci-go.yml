@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: ${{ github.event_name == 'pull_request' && github.run_id || 'release-main' }}
+  group: ${{ github.event_name == 'pull_request' && github.run_id || 'go-service-main' }}
   cancel-in-progress: false
 
 jobs:

@@ -145,8 +145,10 @@ jobs:
       #   with:
       #     dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
 
-      # - name: "Lint: Dotnet Format"
-      #   run: dotnet format ${{ steps.setup-ci.outputs.app-dir }} --verify-no-changes
+      - name: "Lint: golang"
+        uses: golangci/golangci-lint-action@v9
+        with:
+          version: v2.3
 
   test:
     name: "Build & Test"
@@ -164,7 +166,6 @@ jobs:
         with:
           app-dir: ${{ needs.setup.outputs.app-dir }}
 
-
       - name: "Docker: Build and Publish Image"
         uses: mmastersvz/central-ci/actions/docker-publish@main
         with:
@@ -174,8 +175,8 @@ jobs:
           context: ./${{ needs.setup.outputs.app-dir }}
           cache-scope: ${{ needs.setup.outputs.app-name }}
 
-  # security:
-  #   name: "Security"
+  # post-security-scans:
+  #   name: "Post security scans"
   #   runs-on: ubuntu-latest
   #   needs: [setup, build]
   #   steps:

@@ -54,7 +54,7 @@ jobs:
           APP_DIR: services/go-service
           PROJECT_PATH: .
           LANGUAGE: go
-          tools_version_file: ./.tools-versions
+          tools_version_file: ./.tool-versions
         run: |
           echo "app-name=${APP_NAME}" >> $GITHUB_OUTPUT
           echo "app-dir=${APP_DIR}" >> $GITHUB_OUTPUT

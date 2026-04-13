@@ -42,31 +42,22 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       build-version: ${{ steps.version.outputs.build-version }}
-      docker-push: ${{ steps.setup-ci.outputs.docker-push }}
-      # dotnet-version: ${{ steps.setup-ci.outputs.dotnet-version }}
-      go-version: ${{ steps.setup-ci.outputs.go-version }}
-      docker-tags: ${{ steps.setup-ci.outputs.docker-tags }}
+      docker-push: ${{ steps.setup-app.outputs.docker-push }}
+      # dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
+      go-version: ${{ steps.setup-app.outputs.go-version }}
+      docker-tags: ${{ steps.setup-app.outputs.docker-tags }}
 
     steps:
-      - name: "Checkout"
-        uses: actions/checkout@v6
+      - name: "Setup: CI"
+        id: prep
+        uses: mmastersvz/central-ci/actions/setup@main
         with:
-          fetch-depth: 0
-
-      - name: Capture commit SHA
-        id: sha
-        run: echo "commit_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
-
-      - name: "Version"
-        id: version
-        uses: mmastersvz/central-ci/actions/resolve-version@main
-        with:
-          service: go-service
-          token: ${{ secrets.GITHUB_TOKEN }}
+          service-name: ${{ env.APP_NAME }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
       # must be after version step since it uses the build version to determine docker tags
-      - name: "Setup CI"
-        id: setup-ci
+      - name: "Setup: APP"
+        id: setup-app
         run: |
           if [ ${{ env.LANGUAGE }} == "go" ]; then
             LANGUAGE_NAME="golang"

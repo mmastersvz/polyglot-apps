@@ -60,11 +60,16 @@ jobs:
           echo "app-dir=${APP_DIR}" >> $GITHUB_OUTPUT
           echo "project-path=${PROJECT_PATH}" >> $GITHUB_OUTPUT
 
+          if [ ${LANGUAGE} == "go" ]; then
+            LANGUAGE_NAME="golang"
+          else
+            LANGUAGE_NAME=${LANGUAGE}
+          fi
           # Look for the line starting with the tool name and get the second column
-          tool_version=$(grep "^${LANGUAGE} " "${tools_version_file}" | awk '{print $2}')
+          tool_version=$(grep "^${LANGUAGE_NAME} " "${tools_version_file}" | awk '{print $2}')
 
           if [ -z "$tool_version" ]; then
-            echo "::error::Tool '${LANGUAGE}' not found in ${tools_version_file}"
+            echo "::error::Tool '${LANGUAGE_NAME}' not found in ${tools_version_file}"
             exit 1
           fi
 

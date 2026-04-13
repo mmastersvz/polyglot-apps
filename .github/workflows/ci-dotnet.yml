@@ -77,7 +77,7 @@ jobs:
           echo "docker-tags=${docker_tags}" >> $GITHUB_OUTPUT
 
       - name: Scan for Secrets
-        uses: mmastersvz/central-ci/actionsgithub/actions/secret-scan@main
+        uses: mmastersvz/central-ci/actions/secret-scan@main
 
       # - name: "Cache: Super-Linter Docker layers"
       #   uses: actions/cache@v4

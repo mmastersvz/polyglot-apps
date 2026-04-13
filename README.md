@@ -1,6 +1,6 @@
-# polyglot-actions-showcase
+# polyglot-apps
 
-A monorepo showcasing GitHub Actions patterns across 5 languages: Go, Node.js, Python, .NET, and Java Spring Boot.
+A monorepo showng GitHub Actions patterns across different languages: Go, Node.js, Python, .NET, and Java Spring Boot.
 
 ## What this showcases
 

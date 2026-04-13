@@ -40,7 +40,7 @@ jobs:
     name: "Setup"
     runs-on: ubuntu-latest
     outputs:
-      build-version: ${{ steps.prep.outputs.version }}
+      build-version: ${{ steps.prep.outputs.build-version }}
       docker-push: ${{ steps.setup-docker.outputs.docker-push }}
       dotnet-version: ${{ steps.setup-app.outputs.dotnet-version }}
       docker-tags: ${{ steps.setup-docker.outputs.docker-tags }}
@@ -78,7 +78,7 @@ jobs:
         uses: mmastersvz/central-ci/actions/setup-docker@main
         with:
           app-name: ${{ env.APP_NAME }}
-          app-version: ${{ steps.setup-app.outputs.version }}
+          app-version: ${{ steps.prep.outputs.build-version }}
 
       - name: "Setup: .NET"
         uses: actions/setup-dotnet@v4

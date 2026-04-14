@@ -1,12 +1,17 @@
-FROM maven:3.9-eclipse-temurin-21 AS build
-WORKDIR /app
-COPY pom.xml .
-RUN mvn dependency:go-offline -B
-COPY src/ src/
-RUN mvn package -DskipTests -B
 
 FROM eclipse-temurin:21-jre-alpine
-WORKDIR /app
-COPY --from=build /app/target/*.jar app.jar
+
+ENV PORT=8080
+ENV CLASSPATH=/opt/lib
 EXPOSE 8080
-ENTRYPOINT ["java", "-jar", "app.jar"]
+
+# copy pom.xml and wildcards to avoid this command failing if there's no target/lib directory
+COPY pom.xml target/lib* /opt/lib/
+
+COPY target/*.jar /opt/app.jar
+
+COPY docker-entrypoint.sh /opt/docker-entrypoint.sh
+RUN chmod +x /opt/docker-entrypoint.sh
+
+WORKDIR /opt
+ENTRYPOINT ["/opt/docker-entrypoint.sh"]

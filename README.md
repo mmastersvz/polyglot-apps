@@ -28,7 +28,7 @@ polyglot-actions-showcase/
 │       ├── ci-java.yml                  # Java: path filter, Maven cache, tests
 │       └── reusable-service-release.yml # Shared: version → docker → release
 └── services/
-    ├── go-service/          # Go 1.22 HTTP server
+    ├── go-service/          # Go 1.26 HTTP server
     ├── node-service/        # Express + Jest
     ├── python-service/      # FastAPI + pytest
     ├── dotnet-service/      # .NET 8 Minimal API + xUnit
@@ -108,6 +108,7 @@ Each service can be run independently:
 ```bash
 # Go
 cd services/go-service
+go install golang.org/x/vuln/cmd/govulncheck@latest
 go run .
 
 # Node

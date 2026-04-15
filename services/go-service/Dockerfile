@@ -18,11 +18,6 @@ RUN chown -R appuser:appgroup /app && \
 # Switch to non-root user
 USER 1001:1001
 
-# Ensure the binary has execution permissions
-RUN chmod +x app
-
-USER 1001:1001
-
 EXPOSE 8080
 
 CMD ["./app"]

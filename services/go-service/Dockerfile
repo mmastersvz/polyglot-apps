@@ -9,6 +9,7 @@ COPY app .
 
 # Ensure the binary has execution permissions
 RUN chmod +x app
+USER app
 
 EXPOSE 8080
 

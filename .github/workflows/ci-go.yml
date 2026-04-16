@@ -24,4 +24,5 @@ jobs:
       app-name: "go-service"
       app-dir: "services/go-service"
       # tool-versions-path: ./.tool-versions
-    secrets: inherit
+    secrets:
+      github-token: ${{ secrets.GITHUB_TOKEN }}

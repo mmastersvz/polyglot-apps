@@ -30,6 +30,7 @@ jobs:
       app-dir:      services/java-service
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}
+      nvd-api-key: ${{ secrets.NVD_API_KEY }}
 
   # test:
   #   name: Build & Test

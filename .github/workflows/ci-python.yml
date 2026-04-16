@@ -28,5 +28,8 @@ jobs:
     with:
       app-name:     python-service
       app-dir:      services/python-service
+      # GHSA-6w46-j5rx-g56g (CVE-2025-71176) — pytest path traversal, no fix until pytest 9.0.3
+      # Remove this once pytest 9.0.3 is available and requirements.txt is updated.
+      pip-audit-args: "--ignore-vuln GHSA-6w46-j5rx-g56g"
     secrets:
       github-token: ${{ secrets.GITHUB_TOKEN }}

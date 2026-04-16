@@ -1,5 +1,6 @@
-fastapi==0.110.0
+fastapi==0.117.0
+starlette==0.47.3        # CVE-2024-47874, CVE-2025-54121 — requires fastapi>=0.117.0
 uvicorn[standard]==0.29.0
 httpx==0.27.0
-pytest==8.1.1
+pytest==8.4.2            # CVE-2025-71176 unfixed upstream until pytest 9.0.3
 pytest-asyncio==0.23.6

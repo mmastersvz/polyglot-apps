@@ -5,3 +5,5 @@ dotnet  8.0.419
 java    temurin-21.0.7+6.0.LTS
 maven   3.9.9
 actionlint 1.7.12
+helm       3.14.4
+helm-docs  1.14.2
